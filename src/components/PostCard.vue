@@ -1,6 +1,7 @@
 <template>
     <div class=post @click="isActive = !isActive" :class="{ post__active: isActive }">
-        <p><strong>Название</strong><router-link class="post__link" :to="`/post/${post.id}`">{{ post.title }}</router-link></p>
+        <p><strong>Название</strong><router-link class="post__link" :to="`/post/${post.id}`">{{ post.title }}</router-link>
+        </p>
         <p><strong>Описание</strong> {{ post.body }}</p>
         <my-button @click="removePost" class="button">Удалить</my-button>
     </div>
@@ -8,20 +9,36 @@
 </template>
 
 <script>
+import { ref, reactive, onMounted, computed, watch } from "vue";
+
 export default {
     props: {
         post: { type: Object, required: true, default: null }
     },
-    data() {
-        return {
-            isActive: false,
-        };
+    // НОВЫЙ ВАРИАНТ
+
+    setup(props, context) {
+        function removePost() {
+            context.emit("removePost", props.item.id);
+        }
+
+        const isActive = ref(false);
+
+        return {isActive, removePost}
     },
-    methods: {
-        removePost() {
-            this.$emit("removePost", this.post.id);
-        },
-    },
+
+    // СТАРЫЙ ВАРИАНТ 
+
+    // data() {
+    //     return {
+    //         isActive: false,
+    //     };
+    // },
+    // methods: {
+    //     removePost() {
+    //         this.$emit("removePost", this.post.id);
+    //     },
+    // },
 }
 </script>
 
@@ -47,10 +64,9 @@ export default {
     border: 1px solid #fff;
 }
 
-.post__link{
+.post__link {
     color: #000;
     text-decoration: underline;
     margin-left: 7px;
 }
-
 </style>

@@ -24,7 +24,8 @@
     <my-input v-model:mValue="searching" placeholder="Поиск"></my-input>
 
     <div v-if="sortedAndFilteredPosts.length">
-        <PostCard v-for="post in sortedAndFilteredPosts.slice((activePage - 1) * limit, (activePage - 1) * limit + limit)"
+        <PostCard
+            v-for="post in [...sortedAndFilteredPosts, post].slice((activePage - 1) * limit, (activePage - 1) * limit + limit)"
             :key="post.id" :post="post" @removePost="removePost" />
     </div>
     <h2 v-else>Постов нет</h2>
@@ -37,104 +38,189 @@
     {{ $store.state.post }}
     {{ $store.getters.getPost }}
 
-    {{  $store.state.auto }}
+    {{ $store.state.auto }}
 </template>
 
 <script>
 import PostCard from "@/components/PostCard.vue";
 import DialogModal from "@/components/DialogModal.vue";
 import axios from "axios";
+import { ref, reactive, onMounted, computed, watch } from "vue";
+import { useStore } from "vuex"
+import { usePostStore } from "@/pinia";
+import { storeToRefs } from "pinia";
 
 export default {
     components: {
         PostCard,
         DialogModal,
     },
-    // data - просто данные, переменные
-    data() {
-        return {
-            title: "",
-            body: "",
-            show: false,
-            selectedSort: "Выберите вариант сортировки",
-            searching: "",
-            limit: 10,
-            activePage: 1,
-            posts: [
-                { id: 1, title: "HTML", body: "Язык разметки" },
-                { id: 2, title: "CSS", body: "Язык стилей" },
-                { id: 3, title: "JS", body: "Язык скриптов" },
-                { id: 4, title: "Vbnue", body: "Fros3vf-фреймворк" },
-            ]
-        }
-    },
-    // methods - просто методы
-    methods: {
-        setTitle(e) {
-            this.title = e.target.value
-        },
-        addPost() {
-            this.posts.push({
-                id: new Date,
-                title: this.title,
-                body: this.body,
-            });
 
-            this.title = "";
-            this.body = "";
-            this.show = !this.show
-        },
-        removePost(id) {
-            this.posts = this.posts.filter(el => el.id != id);
-        },
-        async getPosts() {
+    // НОВЫЙ ВАРИАНТ
+    setup() {
+        function addPost() {
+            const newPost = {
+                id: new Date(),
+                title: title.value,
+                body: body.value,
+            };
+            posts.data.push(newPost);
+        }
+
+        function removePost(id) {
+            posts.data = posts.data.filter((el) => el.id != id)
+        }
+
+        async function getPosts() {
             try {
                 const response = await axios.get("https://jsonplaceholder.typicode.com/posts");
                 if (response.status == 200) {
-                    this.posts = response.data
+                    posts.data = response.data
                 }
             } catch (e) {
                 console.log(e);
             }
         }
-    },
-    mounted() {
-        this.getPosts();
-        // Взаимодействие с action
-        this.$store.dispatch("setId", 103)
-        // Взаимодействие с mutations(так лучше не делать, к mutations лучше обращаться из action)
-        this.$store.commit("changePost", {id: 102})
-    
-        this.$store.dispatch("auto/setCar", "goveshka")
-    },
-    // watch позволяет отслеживать изменение какой-то переменной
-    // watch: {
-    //   selectedSort(newValue) {
-    //     this.posts.sort((post1, post2) => {
-    //       return post1[newValue].localeCompare(post2[newValue]);
-    //     });
-    //   }
-    // },
-    // computed является результатом функции, будет обновляться, если обновляются зависимые от него значения
-    watch: {
-        searching() {
-            this.activePage = 1
-        }
-    },
-    computed: {
-        sortedPosts() {
-            if (this.selectedSort === "Выберите вариант сортировки") return this.posts;
-            return [...this.posts].sort((post1, post2) => {
-                return post1[this.selectedSort].localeCompare(post2[this.selectedSort]);
+
+        const store = useStore()
+
+        const title = ref("");
+        const body = ref("");
+        const show = ref(false);
+        const selectedSort = ref("Выберите вариант сортировки");
+        const searching = ref("");
+        const limit = ref(10);
+        const activePage = ref(1);
+        const postStore = usePostStore();
+        const {post} = storeToRefs(postStore);
+        const {changePost} = postStore
+
+        const posts = reactive(
+            {
+                data: [{ id: 1, title: "HTML", body: "Язык разметки" },
+                { id: 2, title: "CSS", body: "Язык стилей" },
+                { id: 3, title: "JS", body: "Язык скриптов" },
+                { id: 4, title: "Vbnue", body: "Fros3vf-фреймворк" }],
+            })
+
+        const sortedPosts = computed(() => {
+            if (selectedSort.value === "Выберите вариант сортировки") return posts.data
+            return [...posts.data].sort((post1, post2) => {
+                return post1[selectedSort.value].localeCompare(post2[selectedSort.value]);
             });
-        },
-        sortedAndFilteredPosts() {
-            return this.sortedPosts.filter(post => post.title.toLowerCase().includes(this.searching.trim().toLowerCase()));
-        },
-        pagesCount() {
-            return Math.ceil(this.sortedAndFilteredPosts.length / this.limit)
-        },
+        });
+
+        const sortedAndFilteredPosts = computed(() => {
+            return sortedPosts.value.filter(post => post.title.toLowerCase().includes(searching.value.trim().toLowerCase()));
+        });
+
+        const pagesCount = computed(() => {
+            return Math.ceil([...sortedAndFilteredPosts.value, post].length / limit.value);
+        });
+
+        onMounted(async () => {
+            await getPosts();
+            store.dispatch("auto/setCar", "goveshka")
+            changePost(104);
+        });
+
+        watch(searching, () => {
+            activePage.value = 1
+        });
+
+        return {
+            title, body, show, pagesCount, sortedAndFilteredPosts, removePost,
+            addPost, selectedSort, searching, limit, activePage, post,
+        }
     }
+
+    // СТАРЫЙ ВАРИАНТ
+
+    // data - просто данные, переменные
+    // data() {
+    //     return {
+    //         title: "",
+    //         body: "",
+    //         show: false,
+    //         selectedSort: "Выберите вариант сортировки",
+    //         searching: "",
+    //         limit: 10,
+    //         activePage: 1,
+    // posts: [
+    //     { id: 1, title: "HTML", body: "Язык разметки" },
+    //     { id: 2, title: "CSS", body: "Язык стилей" },
+    //     { id: 3, title: "JS", body: "Язык скриптов" },
+    //     { id: 4, title: "Vbnue", body: "Fros3vf-фреймворк" },
+    // ]
+    //     }
+    // },
+    // // methods - просто методы
+    // methods: {
+    //     setTitle(e) {
+    //         this.title = e.target.value
+    //     },
+    //     addPost() {
+    //         this.posts.push({
+    //             id: new Date,
+    //             title: this.title,
+    //             body: this.body,
+    //         });
+
+    //         this.title = "";
+    //         this.body = "";
+    //         this.show = !this.show
+    //     },
+    //     removePost(id) {
+    //         this.posts = this.posts.filter(el => el.id != id);
+    //     },
+    // async getPosts() {
+    //     try {
+    //         const response = await axios.get("https://jsonplaceholder.typicode.com/posts");
+    //         if (response.status == 200) {
+    //             this.posts = response.data
+    //         }
+    //     } catch (e) {
+    //         console.log(e);
+    //     }
+    // }
+    // },
+    // mounted() {
+    //     this.getPosts();
+    //     // Взаимодействие с action
+    //     this.$store.dispatch("setId", 103)
+    //     // Взаимодействие с mutations(так лучше не делать, к mutations лучше обращаться из action)
+    //     this.$store.commit("changePost", {id: 102})
+
+    //     this.$store.dispatch("auto/setCar", "goveshka")
+    // },
+    // // watch позволяет отслеживать изменение какой-то переменной
+    // // watch: {
+    // //   selectedSort(newValue) {
+    // //     this.posts.sort((post1, post2) => {
+    // //       return post1[newValue].localeCompare(post2[newValue]);
+    // //     });
+    // //   }
+    // // },
+    // watch: {
+    //     searching() {
+    //         this.activePage = 1
+    //     }
+    // },
+    // // computed является результатом функции, будет обновляться, если обновляются зависимые от него значения
+    // computed: {
+    //     sortedPosts() {
+    // if (this.selectedSort === "Выберите вариант сортировки") return this.posts;
+    // return [...this.posts].sort((post1, post2) => {
+    //     return post1[this.selectedSort].localeCompare(post2[this.selectedSort]);
+    // });
+    //     },
+    //     sortedAndFilteredPosts() {
+    //         return this.sortedPosts.filter(post => post.title.toLowerCase().includes(this.searching.trim().toLowerCase()));
+    //     },
+    //     pagesCount() {
+    //         return Math.ceil(this.sortedAndFilteredPosts.length / this.limit)
+    //     },
+    // }
 }
 
 </script>
